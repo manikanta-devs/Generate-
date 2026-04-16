@@ -16,6 +16,34 @@ import Lottie from 'lottie-react';
 import { useFaceDetector } from './useFaceDetector';
 import { useSpeechAnalyzer } from './useSpeechAnalyzer';
 
+function normalizeSession(session) {
+  if (!session || typeof session !== 'object') return null;
+  const toPercent = (value) => {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return 0;
+    return Math.max(0, Math.min(100, Math.round(n)));
+  };
+
+  return {
+    confidence: toPercent(session.confidence),
+    fluency: toPercent(session.fluency),
+    eye: toPercent(session.eye),
+    clarity: toPercent(session.clarity),
+    transcript: typeof session.transcript === 'string' ? session.transcript : '',
+    timestamp: Number.isFinite(Number(session.timestamp)) ? Number(session.timestamp) : Date.now(),
+  };
+}
+
+function loadHistoryFromStorage() {
+  try {
+    const raw = JSON.parse(localStorage.getItem('speakai_history') || '[]');
+    if (!Array.isArray(raw)) return [];
+    return raw.map(normalizeSession).filter(Boolean).slice(0, 50);
+  } catch {
+    return [];
+  }
+}
+
 ChartJS.register(
   RadialLinearScale,
   PointElement,
@@ -405,9 +433,7 @@ function DashboardOverview({ history, lottieData }) {
 // ─── Root Dashboard ────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [history, setHistory] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('speakai_history') || '[]'); } catch { return []; }
-  });
+  const [history, setHistory] = useState(loadHistoryFromStorage);
   const [lottieData, setLottieData] = useState(null);
 
   // Load a free Lottie animation (rocket / success)
@@ -422,9 +448,15 @@ export default function Dashboard() {
   const speech = useSpeechAnalyzer();
 
   const saveSession = (session) => {
-    const updated = [session, ...history].slice(0, 50);
-    setHistory(updated);
-    localStorage.setItem('speakai_history', JSON.stringify(updated));
+    const normalizedSession = normalizeSession(session);
+    if (!normalizedSession) return;
+
+    setHistory((prevHistory) => {
+      const safeHistory = Array.isArray(prevHistory) ? prevHistory : [];
+      const updated = [normalizedSession, ...safeHistory].slice(0, 50);
+      localStorage.setItem('speakai_history', JSON.stringify(updated));
+      return updated;
+    });
   };
 
   return (
