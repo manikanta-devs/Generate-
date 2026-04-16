@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - master
+      - copilot/add-utilities-functions
   workflow_dispatch:
 
 permissions:
