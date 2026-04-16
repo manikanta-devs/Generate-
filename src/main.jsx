@@ -16,15 +16,15 @@ class AppErrorBoundary extends Component {
     return { hasError: true };
   }
 
-  componentDidCatch(error) {
-    console.error('App render error:', error);
+  componentDidCatch(error, errorInfo) {
+    console.error('App render error:', error, errorInfo);
   }
 
   render() {
     if (this.state.hasError) {
       return (
         <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', color: '#e2e8f0' }}>
-          Something went wrong. Please refresh the page.
+          <div role="alert" aria-live="polite">Something went wrong. Please refresh the page.</div>
         </div>
       );
     }
