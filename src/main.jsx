@@ -24,7 +24,7 @@ class AppErrorBoundary extends Component {
     if (this.state.hasError) {
       return (
         <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', color: '#e2e8f0' }}>
-          <div role="alert" aria-live="polite">Something went wrong. Please refresh the page.</div>
+          <div role="alert">Something went wrong. Please refresh the page.</div>
         </div>
       );
     }
