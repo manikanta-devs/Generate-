@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, Component } from 'react';
 import {
   Chart as ChartJS,
   RadialLinearScale,
@@ -12,9 +12,61 @@ import {
   BarElement,
 } from 'chart.js';
 import { Radar, Bar } from 'react-chartjs-2';
-import Lottie from 'lottie-react';
 import { useFaceDetector } from './useFaceDetector';
 import { useSpeechAnalyzer } from './useSpeechAnalyzer';
+
+function normalizeSession(session) {
+  if (!session || typeof session !== 'object') return null;
+  const toPercent = (value) => {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return 0;
+    return Math.max(0, Math.min(100, Math.round(n)));
+  };
+
+  return {
+    confidence: toPercent(session.confidence),
+    fluency: toPercent(session.fluency),
+    eye: toPercent(session.eye),
+    clarity: toPercent(session.clarity),
+    transcript: typeof session.transcript === 'string' ? session.transcript : '',
+    timestamp: Number.isFinite(Number(session.timestamp)) ? Number(session.timestamp) : null,
+  };
+}
+
+function loadHistoryFromStorage() {
+  try {
+    const raw = JSON.parse(localStorage.getItem('speakai_history') || '[]');
+    if (!Array.isArray(raw)) return [];
+    return raw.map(normalizeSession).filter(Boolean).slice(0, 50);
+  } catch {
+    return [];
+  }
+}
+
+// ─── Per-section error boundary ───────────────────────────────────────────────
+class SectionErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() { return { hasError: true }; }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: '24px', textAlign: 'center', color: '#718096', fontSize: 14 }}>
+          ⚠️ This section failed to render.
+          <button
+            onClick={() => this.setState({ hasError: false })}
+            style={{ marginLeft: 12, padding: '4px 12px', background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, color: '#a0aec0', cursor: 'pointer', fontSize: 13 }}
+          >
+            Retry
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 ChartJS.register(
   RadialLinearScale,
@@ -109,7 +161,7 @@ function HistoryTab({ history }) {
           <div key={i} className="glass-card" style={{ padding: '16px 24px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ color: '#a0aec0', fontSize: 13 }}>
-                {new Date(s.timestamp).toLocaleString()}
+                {s.timestamp ? new Date(s.timestamp).toLocaleString() : 'No date recorded'}
               </div>
               <div style={{ display: 'flex', gap: 24 }}>
                 {[
@@ -300,7 +352,7 @@ function PracticeTab({ face, speech, onSessionSave }) {
 }
 
 // ─── Dashboard Overview Tab ────────────────────────────────────────────────────
-function DashboardOverview({ history, lottieData }) {
+function DashboardOverview({ history }) {
   const avgOf = (key) =>
     history.length
       ? Math.round(history.reduce((s, h) => s + h[key], 0) / history.length)
@@ -356,14 +408,7 @@ function DashboardOverview({ history, lottieData }) {
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-        <h2 className="section-title" style={{ margin: 0 }}>Dashboard Overview</h2>
-        {lottieData && (
-          <div style={{ width: 80, height: 80 }}>
-            <Lottie animationData={lottieData} loop autoplay style={{ width: '100%', height: '100%' }} />
-          </div>
-        )}
-      </div>
+      <h2 className="section-title">Dashboard Overview</h2>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
         {[
@@ -390,11 +435,15 @@ function DashboardOverview({ history, lottieData }) {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
           <div className="glass-card">
             <div style={{ fontWeight: 600, marginBottom: 16, color: '#e2e8f0' }}>Skills Radar</div>
-            <Radar data={radarData} options={chartOptions} />
+            <SectionErrorBoundary>
+              <Radar data={radarData} options={chartOptions} />
+            </SectionErrorBoundary>
           </div>
           <div className="glass-card">
             <div style={{ fontWeight: 600, marginBottom: 16, color: '#e2e8f0' }}>Session Progress</div>
-            <Bar data={barData} options={chartOptions} />
+            <SectionErrorBoundary>
+              <Bar data={barData} options={chartOptions} />
+            </SectionErrorBoundary>
           </div>
         </div>
       )}
@@ -405,26 +454,21 @@ function DashboardOverview({ history, lottieData }) {
 // ─── Root Dashboard ────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [history, setHistory] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('speakai_history') || '[]'); } catch { return []; }
-  });
-  const [lottieData, setLottieData] = useState(null);
-
-  // Load a free Lottie animation (rocket / success)
-  useEffect(() => {
-    fetch('https://assets9.lottiefiles.com/packages/lf20_touohxv0.json')
-      .then((r) => r.json())
-      .then(setLottieData)
-      .catch(() => {});
-  }, []);
+  const [history, setHistory] = useState(loadHistoryFromStorage);
 
   const face = useFaceDetector();
   const speech = useSpeechAnalyzer();
 
   const saveSession = (session) => {
-    const updated = [session, ...history].slice(0, 50);
-    setHistory(updated);
-    localStorage.setItem('speakai_history', JSON.stringify(updated));
+    const normalizedSession = normalizeSession(session);
+    if (!normalizedSession) return;
+
+    setHistory((prevHistory) => {
+      const safeHistory = Array.isArray(prevHistory) ? prevHistory : [];
+      const updated = [normalizedSession, ...safeHistory].slice(0, 50);
+      localStorage.setItem('speakai_history', JSON.stringify(updated));
+      return updated;
+    });
   };
 
   return (
@@ -449,7 +493,7 @@ export default function Dashboard() {
 
         <div className="content-area">
           {activeTab === 'dashboard' && (
-            <DashboardOverview history={history} lottieData={lottieData} />
+            <DashboardOverview history={history} />
           )}
           {activeTab === 'practice' && (
             <PracticeTab face={face} speech={speech} onSessionSave={saveSession} />
