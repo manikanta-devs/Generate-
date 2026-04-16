@@ -1,4 +1,4 @@
-import LinkLock from './LinkLock.jsx';
+import Dashboard from './Dashboard.jsx';
 export default function App() {
-  return <LinkLock />;
+  return <Dashboard />;
 }
