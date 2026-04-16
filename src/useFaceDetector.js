@@ -4,6 +4,9 @@ import { useRef, useState, useCallback, useEffect } from 'react';
 const MODELS_URL =
   'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js-models@master';
 
+const ROLLING_WINDOW_SIZE = 20;
+const ROLLING_DECAY = (ROLLING_WINDOW_SIZE - 1) / ROLLING_WINDOW_SIZE;
+
 export function useFaceDetector() {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -87,9 +90,9 @@ export function useFaceDetector() {
         const has = Boolean(detection);
         setFaceDetected(has);
         if (has) detected++;
-        // rolling accuracy over last 20 frames → eye-contact percentage
-        setEyeScore(Math.round((detected / Math.min(total, 20)) * 100));
-        if (total > 20) { total = 20; detected = Math.round(detected * (19 / 20)); }
+        // rolling accuracy over last ROLLING_WINDOW_SIZE frames → eye-contact percentage
+        setEyeScore(Math.round((detected / Math.min(total, ROLLING_WINDOW_SIZE)) * 100));
+        if (total > ROLLING_WINDOW_SIZE) { total = ROLLING_WINDOW_SIZE; detected = Math.round(detected * ROLLING_DECAY); }
       } catch {
         // detection error — skip frame
       }
