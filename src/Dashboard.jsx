@@ -30,7 +30,7 @@ function normalizeSession(session) {
     eye: toPercent(session.eye),
     clarity: toPercent(session.clarity),
     transcript: typeof session.transcript === 'string' ? session.transcript : '',
-    timestamp: Number.isFinite(Number(session.timestamp)) ? Number(session.timestamp) : Date.now(),
+    timestamp: Number.isFinite(Number(session.timestamp)) ? Number(session.timestamp) : null,
   };
 }
 
@@ -137,7 +137,7 @@ function HistoryTab({ history }) {
           <div key={i} className="glass-card" style={{ padding: '16px 24px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ color: '#a0aec0', fontSize: 13 }}>
-                {new Date(s.timestamp).toLocaleString()}
+                {s.timestamp ? new Date(s.timestamp).toLocaleString() : 'Unknown date'}
               </div>
               <div style={{ display: 'flex', gap: 24 }}>
                 {[
